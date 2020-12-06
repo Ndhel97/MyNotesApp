@@ -4,20 +4,28 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import android.content.ContentValues;
+import android.content.Context;
 import android.content.Intent;
+import android.database.ContentObservable;
+import android.database.ContentObserver;
 import android.database.Cursor;
 import android.os.AsyncTask;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.HandlerThread;
 import android.view.View;
 import android.widget.ProgressBar;
 
 import com.dicoding.picodiploma.mynotesapp.adapter.NoteAdapter;
+import com.dicoding.picodiploma.mynotesapp.db.DatabaseContract;
 import com.dicoding.picodiploma.mynotesapp.db.NoteHelper;
 import com.dicoding.picodiploma.mynotesapp.entity.Note;
 import com.dicoding.picodiploma.mynotesapp.helper.MappingHelper;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.android.material.snackbar.Snackbar;
 
+import java.io.DataOutput;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 
@@ -53,13 +61,20 @@ public class MainActivity extends AppCompatActivity implements LoadNotesCallback
             }
         });
 
-        noteHelper = NoteHelper.getInstance(getApplicationContext());
-        noteHelper.open();
+        HandlerThread handlerThread = new HandlerThread("DataObserver");
+        handlerThread.start();
+        Handler handler = new Handler(handlerThread.getLooper());
 
-        new LoadNotesAsync(noteHelper, this).execute();
+        DataObserver myObserver = new DataObserver(handler, this);
+        getContentResolver().registerContentObserver(DatabaseContract.NoteColumns.CONTENT_URI, true, myObserver);
+
+//        noteHelper = NoteHelper.getInstance(getApplicationContext());
+//        noteHelper.open();
+//
+//        new LoadNotesAsync(noteHelper, this).execute();
 
         if (savedInstanceState == null) {
-            new LoadNotesAsync(noteHelper, this).execute();
+            new LoadNotesAsync(this, this).execute();
         } else {
             ArrayList<Note> list = savedInstanceState.getParcelableArrayList(EXTRA_STATE);
             if (list != null) {
@@ -140,11 +155,11 @@ public class MainActivity extends AppCompatActivity implements LoadNotesCallback
     }
 
     private static class LoadNotesAsync extends AsyncTask<Void, Void, ArrayList<Note>> {
-        private final WeakReference<NoteHelper> weakNoteHelper;
+        private final WeakReference<Context> weakContext;
         private final WeakReference<LoadNotesCallback> weakCallback;
 
-        private LoadNotesAsync(NoteHelper noteHelper, LoadNotesCallback callback) {
-            weakNoteHelper = new WeakReference<>(noteHelper);
+        private LoadNotesAsync(Context context, LoadNotesCallback callback) {
+            weakContext = new WeakReference<>(context);
             weakCallback = new WeakReference<>(callback);
         }
 
@@ -156,7 +171,8 @@ public class MainActivity extends AppCompatActivity implements LoadNotesCallback
 
         @Override
         protected ArrayList<Note> doInBackground(Void... voids) {
-            Cursor dataCursor = weakNoteHelper.get().queryAll();
+            Context context = weakContext.get();
+            Cursor dataCursor = context.getContentResolver().query(DatabaseContract.NoteColumns.CONTENT_URI, null, null, null, null);
             return MappingHelper.mapCursorToArrayList(dataCursor);
         }
 
@@ -164,6 +180,21 @@ public class MainActivity extends AppCompatActivity implements LoadNotesCallback
         protected void onPostExecute(ArrayList<Note> notes) {
             super.onPostExecute(notes);
             weakCallback.get().postExecute(notes);
+        }
+    }
+
+    public static class DataObserver extends ContentObserver {
+        final Context context;
+
+        public DataObserver(Handler handler, Context context) {
+            super(handler);
+            this.context = context;
+        }
+
+        @Override
+        public void onChange(boolean selfChange) {
+            super.onChange(selfChange);
+            new LoadNotesAsync(context, (LoadNotesCallback) context).execute();
         }
     }
 }

@@ -9,7 +9,14 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.MyNotesApp">
-        <activity android:name=".NoteAddUpdateActivity"></activity>
+        <provider
+            android:name=".provider.NoteProvider"
+            android:authorities="com.dicoding.picodiploma.mynotesapp"
+            android:enabled="true"
+            android:exported="true"
+            android:readPermission="com.dicoding.mynotesapp.READ_DATABASE"
+            android:writePermission="com.dicoding.mynotesapp.WRITE_DATABASE" />
+        <activity android:name=".NoteAddUpdateActivity" />
         <activity android:name=".MainActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
